@@ -9,11 +9,12 @@ var Game = (function(canvas) {
   var FRAMES_PER_SECOND = 30;
   var FRAME_LENGTH = 1/FRAMES_PER_SECOND*1000;
 
-  var FSM = { title: 1, game: 2, instructions: 3 };
+  var FSM = { title: 1, game: 2, incorrect: 3, instructions: 4 };
 
   var state = {};
   var MAX_RECTANGLES = 7;
   var DISPLAY_RECTANGLE_FOR = 2; // seconds
+  var INCORRECT_DISPLAY_RECTANGLE_FOR = 0.5;
 
   //------------------------------------------------------------------------------------------------
   var ctx,                   // canvas context
@@ -230,14 +231,19 @@ var Game = (function(canvas) {
       if (s.currentRect == s.rectangles) {
         drawText(minSide/5,  0,    0, "Correct!", "#00CC00");
         state.score += 1;
+        state.gamesPlayed += 1;
+        drawText(minSide/10, 0, minSide/8, "Your score is " + state.score + "/" + state.gamesPlayed,
+                                   "#666666");
+        drawText(minSide/20, 0, minSide/5, "Tap/space/click to play again", "#999999");
+        newGameHandlers();
+
       } else {
-        drawText(minSide/10,  0,    0, "No! This is white!", "#FFFFFF");
+        unbindHandlers();
+        state.fsm = FSM.incorrect;
+        s.incorrectStartRect = s.currentRect;
+        s.t = 0;
+        s.gameOver = false;
       }
-      state.gamesPlayed += 1;
-      drawText(minSide/10, 0, minSide/8, "Your score is " + state.score + "/" + state.gamesPlayed,
-                                 "#666666");
-      drawText(minSide/20, 0, minSide/5, "Tap/space/click to play again", "#999999");
-      newGameHandlers();
     };
     bindHandlers(h);
   }
@@ -282,23 +288,53 @@ var Game = (function(canvas) {
 
   }
 
+  var drawRects = function() {
+    var s = state.localState;
+    for (i=s.currentRect; i >= 1; i--) {
+      n = i;
+      // v is between 0.0 and 1.0.
+      v = (Math.log(n) / Math.log(s.rectangles));
+      c = Math.floor((s.greyStart + v*s.greyDiff)*255.0);
+//        console.log(s.currentRect, s.rectangles, v, c);
+      color = "rgba("+c+","+c+","+c+",1.0)";
+      drawRect(0,0,rectWidth()*n, rectHeight()*n, color);
+    }
+  };
+
+  //------------------------------------------------------------------------------------------------
+  var incorrect = function() {
+    var s = state.localState;
+    var c, color, i, n, v, cur;
+
+    if (!s.gameOver) {
+      ctx.clearRect(0,0,cw,ch);
+      drawRects();
+      drawText(minSide/10,  0,    0, "Nope!", "#CC0000");
+
+      cur = Math.floor(s.t / INCORRECT_DISPLAY_RECTANGLE_FOR) + s.incorrectStartRect;
+      s.currentRect = Math.min(s.rectangles, cur);
+
+
+      if (cur > s.rectangles) {
+
+        drawText(minSide/10, 0, minSide/8, "Your score is " + state.score + "/" + state.gamesPlayed,
+                                 "#666666");
+        drawText(minSide/20, 0, minSide/5, "Tap/press/click to play again", "#999999");
+        state.gamesPlayed += 1;
+        s.gameOver = true;
+        newGameHandlers();
+      }
+      s.t += FRAME_LENGTH/1000.0;
+    }
+  };
+
+
 
   //------------------------------------------------------------------------------------------------
   var game = function() {
     var s = state.localState;
     var c, color, i, n, v, cur;
 
-    var drawRects = function() {
-      for (i=s.currentRect; i >= 1; i--) {
-        n = i;
-        // v is between 0.0 and 1.0.
-        v = (Math.log(n) / Math.log(s.rectangles));
-        c = Math.floor((s.greyStart + v*s.greyDiff)*255.0);
-//        console.log(s.currentRect, s.rectangles, v, c);
-        color = "rgba("+c+","+c+","+c+",1.0)";
-        drawRect(0,0,rectWidth()*n, rectHeight()*n, color);
-      }
-    };
 
     if (!s.gameOver) {
       ctx.clearRect(0,0,cw,ch);
@@ -332,6 +368,8 @@ var Game = (function(canvas) {
       drawTitle();
     } else if (state.fsm == FSM.game) {
       game();
+    } else if (state.fsm == FSM.incorrect) {
+      incorrect();
     } else if (state.fsm == FSM.instructions) {
       instructions();
     }
